@@ -37,6 +37,7 @@ export default function Dashboard() {
                     <img src={user.photoURL} alt="User" width="100" style={{ borderRadius: "50%"}} />
                     <h2>{user.displayName}</h2>
                     <p>Email: {user.email}</p>
+                    <button onClick={() => navigate("/create-band")}>Create a Band</button>
                     <button onClick={logout}>Logout</button>
                 </div>
             ) : (
