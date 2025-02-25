@@ -1,7 +1,7 @@
 import { auth, db } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, deleteDoc, arrayRemove } from "firebase/firestore";
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -14,6 +14,7 @@ export default function Dashboard() {
             if (!auth.currentUser) return navigate("/login");
 
             setUser(auth.currentUser);
+            console.log("Current User UID:", auth.currentUser.uid);
 
             //query firestore for bands
             const bandsRef = collection(db, "bands");
@@ -25,6 +26,8 @@ export default function Dashboard() {
                 id: doc.id,
                 ...doc.data()
             }));
+
+            console.log("Fetched Bands:", userBands);
             setBands(userBands);
 
             //fetching pending invites
@@ -95,6 +98,43 @@ export default function Dashboard() {
         }
       };
 
+      const removeMember = async (bandId, memberEmail) => {
+        try {
+            if (!auth.currentUser) return alert ("You must be logged in.");
+            
+
+            const user = auth.currentUser;
+            if (user.email === memberEmail) {
+                alert("You cannot remove yourself as the leader!");
+                return;
+            }
+
+            console.log(`Removing ${memberEmail} from band ${bandId}`);
+
+            const bandRef = doc(db, "bands", bandId);
+
+            await updateDoc(bandRef, {
+                members: arrayRemove(memberEmail)
+            });
+
+            console.log("Member removed from Firestore!");
+            
+            setBands(prevBands =>
+                prevBands.map(band =>
+                    band.id === bandId
+                        ? {...band,members: band.members.filter(m => m!== memberEmail) }
+                        : band
+                )
+            );
+
+            alert(`Removed ${memberEmail} from the band.`);
+        } catch (error) {
+            console.error("Error removing member:", error);
+            alert("Failed to remove member.");
+        }
+      }
+
+
     //logout function
     const logout = async () => {
         await auth.signOut();
@@ -124,7 +164,18 @@ export default function Dashboard() {
                             <p><b>Members:</b></p>
                             <ul className="list-disc ml-4">
                                 {band.members.map(member => (
-                                    <li key={member}>{member === user.email ? `${member} (You)` : member}</li>
+                                    <li key={member} className="flex justify-between items-center">
+                                        {member === user.email ? `${member} (You)` : member}
+
+                                        {band.leaderId === user.uid && member !== user.email && member !== band.leaderId && (
+                                            <button
+                                                className="ml-2 bg-red-500 text-white px-2 py-1 rounded"
+                                                onClick={() => removeMember(band.id, member)}
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
+                                    </li>
                                 ))}
                             </ul>
 
