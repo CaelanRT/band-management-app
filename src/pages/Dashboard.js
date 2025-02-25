@@ -1,7 +1,7 @@
 import { auth, db } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -27,6 +27,7 @@ export default function Dashboard() {
             }));
             setBands(userBands);
 
+            //fetching pending invites
             const userEmail = auth.currentUser.email;
             const inviteQuery = query(collection(db, "invitations"), where("invitedEmail", "==", userEmail));
             const inviteSnapshot = await getDocs(inviteQuery);
@@ -45,19 +46,31 @@ export default function Dashboard() {
         try {
           const user = auth.currentUser;
           if (!user) return alert("You must be logged in.");
+
+          
       
           //Update the band document to add the user as a member
           const bandRef = doc(db, "bands", bandId);
-          const bandSnap = await getDocs(bandRef);
+          const bandSnap = await getDoc(bandRef);
+
+          if(!bandSnap.exists()) {
+            alert("Band not found.");
+            return;
+          }
+
       
           if (bandSnap.exists()) {
             const bandData = bandSnap.data();
-            const updatedMembers = [...bandData.members, user.uid];
-      
-            await updateDoc(bandRef, { members: updatedMembers });
+            const updatedMembers = [...(bandData.members || []), user.uid];
+            
+            await updateDoc(bandRef, {
+                members: arrayUnion(user.uid)
+            });
+
       
             //  Delete the invitation after accepting
             await deleteDoc(doc(db, "invitations", inviteId));
+
       
             alert("You have joined the band!");
             setInvitations(invitations.filter(invite => invite.id !== inviteId));
@@ -104,8 +117,17 @@ export default function Dashboard() {
             {bands.length > 0 ? (
                 <ul>
                     {bands.map(band =>(
-                        <li key={band.id}>
-                            <strong>{band.name}</strong> (Leader: {band.leaderId === user.uid ? "You" : "Someone else"})
+                        <li key={band.id} className="border p-3 rounded-md shadow-md mb-4">
+                            <strong>{band.name}</strong>
+                            <p><b>Leader:</b> {band.leaderId === user.uid ? "You" : "Someone else"}</p>
+
+                            <p><b>Members:</b></p>
+                            <ul className="list-disc ml-4">
+                                {band.members.map(member => (
+                                    <li key={member}>{member === user.email ? `${member} (You)` : member}</li>
+                                ))}
+                            </ul>
+
                             {band.leaderId === user.uid && (
                                 <button onClick={() => navigate(`/invite/${band.id}`)}>Invite Members</button>
                             )}
@@ -121,7 +143,7 @@ export default function Dashboard() {
             <ul>
                 {invitations.map(invite => (
                 <li key={invite.id}>
-                    🎸 <strong>{invite.bandName}</strong> (Invited by: {invite.invitedBy})
+                     <strong>{invite.bandName}</strong> (Invited by: {invite.invitedBy})
                     <button onClick={() => acceptInvite(invite.id, invite.bandId)}>Accept</button>
                     <button onClick={() => rejectInvite(invite.id)}>Reject</button>
                 </li>
