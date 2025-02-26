@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import CreateBand from "./pages/CreateBand";
 import InviteMember from "./pages/InviteMember";
+import CreateEvent from "./pages/CreateEvent";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />}/>
         <Route path="/create-band" element={<CreateBand />}/>
         <Route path="/invite/:bandId" element={<InviteMember />}/>
+        <Route path="/create-event/:bandId" element={<CreateEvent />}/>
       </Routes>
     </Router>
   );

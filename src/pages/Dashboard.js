@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, 
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const [events, setEvents] = useState([]);
     const [user, setUser] = useState(null);
     const [bands, setBands] = useState([]);
     const [invitations, setInvitations] = useState([]);
@@ -29,6 +30,17 @@ export default function Dashboard() {
 
             console.log("Fetched Bands:", userBands);
             setBands(userBands);
+
+            //fetching events
+            const eventsRef = collection(db, "events");
+            const eventQuery = query(eventsRef, where("bandId", "in", userBands.map(band => band.id)));
+            const eventSnapshot = await getDocs(eventQuery);
+
+            const userEvents = eventSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setEvents(userEvents);
 
             //fetching pending invites
             const userEmail = auth.currentUser.email;
@@ -153,6 +165,21 @@ export default function Dashboard() {
                 </div>    
             )}
 
+            <h2>Upcoming Events</h2>
+            {events.length > 0 ?(
+                <ul>
+                    {events.map(event => (
+                        <li key={event.id} className="border p-3 rounded-md shadow-md mb-4">
+                            <strong>{event.title}</strong> - {new Date(event.date).toLocaleString()}
+                            <p><b>Location:</b> {event.location}</p>
+                            <p><b>Created By:</b> {event.createdBy === user.uid ? "You" : event.createdBy}</p>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p>No upcoming events.</p>
+            )}
+
             <h2>Your Bands</h2>
             {bands.length > 0 ? (
                 <ul>
@@ -160,6 +187,10 @@ export default function Dashboard() {
                         <li key={band.id} className="border p-3 rounded-md shadow-md mb-4">
                             <strong>{band.name}</strong>
                             <p><b>Leader:</b> {band.leaderId === user.uid ? "You" : "Someone else"}</p>
+
+                            {band.leaderId === user.uid && (
+                                <button onClick={() => navigate(`/create-event/${band.id}`)}>Schedule Event</button>
+                            )}
 
                             <p><b>Members:</b></p>
                             <ul className="list-disc ml-4">
@@ -188,6 +219,8 @@ export default function Dashboard() {
             ) : (
                 <p>You are not a member of any bands yet.</p>
             )}
+
+            
 
             <h2>Pending Invitations</h2>
             {invitations.length > 0 ? (
