@@ -10,6 +10,7 @@ export default function Dashboard() {
     const [bands, setBands] = useState([]);
     const [invitations, setInvitations] = useState([]);
     const [expandedBands, setExpandedBands] = useState({});
+    const [eventCreators, setEventCreators] = useState({});
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -24,10 +25,20 @@ export default function Dashboard() {
             const querySnapshot = await getDocs(q);
 
             //store bands in state
-            const userBands = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const userBands = await Promise.all(querySnapshot.docs.map(async (doc) => {
+                const bandData = doc.data();
+
+                const memberNames = await Promise.all(
+                    bandData.members.map(async (uid) => await getUserName(uid))
+                );
+
+                return {
+                    id: doc.id,
+                    ...bandData,
+                    members: memberNames,
+                    leaderName: await getUserName(bandData.leaderId)
+                }
+            }))
 
             console.log("Fetched Bands:", userBands);
             setBands(userBands);
@@ -45,7 +56,15 @@ export default function Dashboard() {
                     ...doc.data()
                 }));
                 setEvents(userEvents);
+
+                const creatorNames = [];
+                await Promise.all(userEvents.map(async (event) => {
+                    creatorNames[event.createdBy] = await getUserName(event.createdBy);
+                }));
+                setEventCreators(creatorNames);
             }
+
+
             
 
             //fetching pending invites
@@ -126,41 +145,87 @@ export default function Dashboard() {
         }));
       };
 
-      const removeMember = async (bandId, memberEmail) => {
+      const removeMember = async (bandId, memberName) => {
         try {
-            if (!auth.currentUser) return alert ("You must be logged in.");
+            if (!auth.currentUser) return alert("You must be logged in.");
             
-
             const user = auth.currentUser;
-            if (user.email === memberEmail) {
+            const bandRef = doc(db, "bands", bandId);
+    
+            
+            const bandSnap = await getDoc(bandRef);
+            if (!bandSnap.exists()) {
+                alert("Band not found.");
+                return;
+            }
+            const bandData = bandSnap.data();
+    
+            
+            const usersRef = collection(db, "users");
+            const userQuery = query(usersRef, where("displayName", "==", memberName));
+            const userSnapshot = await getDocs(userQuery);
+    
+            if (userSnapshot.empty) {
+                alert("User not found in Firestore.");
+                return;
+            }
+    
+            const memberUID = userSnapshot.docs[0].id; // 
+    
+            
+            if (!bandData.members.includes(memberUID)) {
+                alert("User is not a member of this band.");
+                return;
+            }
+    
+            if (memberUID === user.uid) {
                 alert("You cannot remove yourself as the leader!");
                 return;
             }
-
-            console.log(`Removing ${memberEmail} from band ${bandId}`);
-
-            const bandRef = doc(db, "bands", bandId);
-
+    
+            console.log(`Removing ${memberName} (UID: ${memberUID}) from band ${bandId}`);
+    
+            
             await updateDoc(bandRef, {
-                members: arrayRemove(memberEmail)
+                members: arrayRemove(memberUID) 
             });
-
+    
             console.log("Member removed from Firestore!");
             
             setBands(prevBands =>
                 prevBands.map(band =>
                     band.id === bandId
-                        ? {...band,members: band.members.filter(m => m!== memberEmail) }
+                        ? {...band, members: band.members.filter(m => m !== memberName) }
                         : band
                 )
             );
-
-            alert(`Removed ${memberEmail} from the band.`);
+    
+            alert(`Removed ${memberName} from the band.`);
         } catch (error) {
             console.error("Error removing member:", error);
             alert("Failed to remove member.");
         }
-      }
+    };
+    
+    
+
+    const getUserName = async (uid) => {
+        if (!uid) return "Unknown User";
+
+        try {
+            const userRef = doc(db, "users", uid);
+            const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists()) {
+                return userSnap.data().displayName;
+            } else {
+                return "Unknown User";
+            }
+        } catch (error) {
+            console.error("Error fetching user name:", error);
+            return "Unknown User";
+        }
+    }
 
 
     //logout function
@@ -181,7 +246,7 @@ export default function Dashboard() {
                 <li key={event.id} className="p-4 bg-white shadow-md rounded-lg">
                   <strong>{event.title}</strong> - {new Date(event.date).toLocaleString()}
                   <p><b>Location:</b> {event.location}</p>
-                  <p><b>Created By:</b> {event.createdBy === user.uid ? "You" : event.createdBy}</p>
+                  <p><b>Created By:</b> {event.createdBy === user.uid ? "You" : eventCreators[event.createdBy] || "Loading..."}</p>
                 </li>
               ))}
             </ul>
@@ -218,21 +283,21 @@ export default function Dashboard() {
                     <div className="mt-4 p-3 border rounded-lg bg-gray-100">
                         <p className="font-semibold">Members:</p>
                         <ul className="mt-2 space-y-2">
-                        {band.members.map((member) => (
-                            <li key={member} className="flex justify-between items-center">
-                            {member} {member === user.email ? "(You)" : ""}
-                            
-                            {/* Show remove button only for leaders, except for themselves */}
-                            {band.leaderId === user.uid && member !== user.email && (
-                                <button
-                                className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-700 transition"
-                                onClick={() => removeMember(band.id, member)}
-                                >
-                                Remove
-                                </button>
-                            )}
-                            </li>
-                        ))}
+                            {band.members.map((member, index) => (
+                                <li key={index} className="flex justify-between items-center">
+                                {member} {member === user.displayName ? "(You)" : ""}
+
+                                {/* Show remove button only for leaders, except for themselves */}
+                                {band.leaderName === user.displayName && member !== user.displayName && (
+                                    <button
+                                    className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-700 transition"
+                                    onClick={() => removeMember(band.id, member)}
+                                    >
+                                    Remove
+                                    </button>
+                                )}
+                                </li>
+                            ))}
                         </ul>
                     </div>
                     )}
