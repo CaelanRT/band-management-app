@@ -1,7 +1,8 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { auth } from "./firebase";
-import { FaPlus, FaBars, FaUserCircle, FaHome, FaMusic, FaCalendarAlt, FaEnvelope, FaCog } from "react-icons/fa";
+import { auth, db } from "./firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { FaPlus, FaBars, FaUserCircle, FaHome, FaMusic, FaCalendarAlt, FaEnvelope, FaCog, FaUsers } from "react-icons/fa";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import CreateBand from "./pages/CreateBand";
@@ -43,12 +44,33 @@ export default function App() {
 }
 
 function DashboardLayout() {
+  const [bands, setBands] = useState([]);
+
+  useEffect(() => {
+    const fetchBands = async () => {
+      if (!auth.currentUser) return;
+      const bandsRef = collection(db, "bands");
+      const q = query(bandsRef, where("members", "array-contains", auth.currentUser.uid));
+      const querySnapshot = await getDocs(q);
+
+      const userBands = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setBands(userBands);
+    };
+
+    fetchBands();
+  }, []);
+
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex min-h-screen h-screen overflow-hidden bg-gray-100">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <div className="p-6 flex-1">
+        <div className="p-6 flex-1 min-h-0 overflow-auto">
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/create-band" element={<CreateBand />} />
@@ -57,7 +79,7 @@ function DashboardLayout() {
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>
         </div>
-        <FloatingActionButton />
+        <FloatingActionButton bands={bands}/>
       </div>
     </div>
   );
@@ -65,10 +87,10 @@ function DashboardLayout() {
 
 
 function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <div className={`bg-purple-800 text-white h-screen p-4 transition-all duration-300 relative ${collapsed ? "w-16" : "w-64"}`}>
+    <div className={`bg-purple-800 text-white min-h-screen h-full p-4 transition-all duration-300 relative ${collapsed ? "w-16" : "w-64"}`}>
       {/* Hamburger Menu Button - Always Stays in the Same Place */}
       <button 
         onClick={() => setCollapsed(!collapsed)} 
@@ -146,11 +168,50 @@ function Header() {
 }
 
 
-function FloatingActionButton() {
+function FloatingActionButton({ bands }) {
+  const [expanded, setExpanded] = useState(false);
+  const handleNavigate = (path) => {
+    setExpanded(false);
+    window.location.href = path;
+  }
+
+  const bandId = bands.length > 0 ? bands[0].id : null;
+
+  const toggleMenu = () => setExpanded(!expanded);
+
   return (
-    <button className="fixed bottom-6 right-6 bg-purple-800 text-white p-4 rounded-full shadow-lf hover:bg-purple-700 transition">
-      <FaPlus size={24} />
-    </button>
-  )
+    <div className="fixed bottom-6 right-6 flex flex-col items-center">
+      <div className={`flex flex-col items-center space-y-2 transition-all duration-300 ${expanded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6 pointer-events-none"}`}>
+        <button
+          onClick={() => handleNavigate("/create-band")}
+          className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition transform scale-95"
+          style={{position: "absolute", bottom:"-50px", right: "60px"}}
+        >
+          <FaMusic size={20} />
+        </button>
+        <button
+          onClick={() => handleNavigate("/create-event/:bandId")}
+          className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition transform scale-95"
+          style={{ position: "absolute", bottom: "10px", right: "30px" }}
+        >
+          <FaCalendarAlt size={20} />
+        </button>
+        <button
+          onClick={() => handleNavigate("/invite/:bandId")}
+          className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition transform scale-95"
+          style={{ position: "absolute", bottom: "50px", right: "-20px" }}
+        >
+          <FaUsers size={20} />
+        </button>
+      </div>
+
+      <button
+        onClick={toggleMenu}
+        className="bg-purple-800 text-white p-5 rounded-full shadow-lg hover:bg-purple-700 transition"
+        >
+          <FaPlus size={24} className={`transform transition-transform duration-300 ${expanded ? "rotate-45" : "rotate-0"}`} />
+        </button>
+    </div>
+  );
 }
 
