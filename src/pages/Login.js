@@ -40,10 +40,21 @@ export default function Login() {
     };
 
     return (
-        <div>
-            <h1>Login</h1>
-            {/*this is the html that creates an H1 for login and creates a button with an onClick function that creates a login with Google button*/}
-            <button onClick={loginWithGoogle}>Login with Google</button>
+        <div className="flex flex-col items-center justify-center h-screen bg-purple-800 text-white">
+            <h1 className="text-4xl font-bold mb-6">Welcome to BandOS</h1>
+            <p className="mb-6 text-lg text-gray-300">Please log in to continue</p>
+            <button
+                onClick={loginWithGoogle}
+                className="bg-white text-purple-800 font-semibold px-6 py-3 rounded-lg shadow-md hover:bg-gray-200 transition flex items-center"
+            >
+                <img
+                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/512px-Google_%22G%22_Logo.svg.png"
+                    alt="Google Logo"
+                    className="w-6 h-6 mr-3"
+                />
+                Login with Google
+            </button>
         </div>
     );
+    
 }

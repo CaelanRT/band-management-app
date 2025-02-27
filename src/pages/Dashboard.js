@@ -9,6 +9,7 @@ export default function Dashboard() {
     const [user, setUser] = useState(null);
     const [bands, setBands] = useState([]);
     const [invitations, setInvitations] = useState([]);
+    const [expandedBands, setExpandedBands] = useState({});
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -31,16 +32,21 @@ export default function Dashboard() {
             console.log("Fetched Bands:", userBands);
             setBands(userBands);
 
-            //fetching events
-            const eventsRef = collection(db, "events");
-            const eventQuery = query(eventsRef, where("bandId", "in", userBands.map(band => band.id)));
-            const eventSnapshot = await getDocs(eventQuery);
+            if (userBands.length === 0) {
+                setEvents([]);
+                
+            } else {
+                const eventsRef = collection(db, "events");
+                const eventQuery = query(eventsRef, where("bandId", "in", userBands.map(band => band.id)));
+                const eventSnapshot = await getDocs(eventQuery);
 
-            const userEvents = eventSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setEvents(userEvents);
+                const userEvents = eventSnapshot.docs.map(doc => ({
+                 id: doc.id,
+                    ...doc.data()
+                }));
+                setEvents(userEvents);
+            }
+            
 
             //fetching pending invites
             const userEmail = auth.currentUser.email;
@@ -51,6 +57,9 @@ export default function Dashboard() {
                 id: doc.id,
                 ...doc.data(),
             }));
+
+            console.log("Fetched Invitations", pendingInvites);
+            
             setInvitations(pendingInvites);
         } 
     
@@ -110,6 +119,13 @@ export default function Dashboard() {
         }
       };
 
+      const toggleBandExpansion = (bandId) => {
+        setExpandedBands((prev) => ({
+            ...prev,
+            [bandId]: !prev[bandId],
+        }));
+      };
+
       const removeMember = async (bandId, memberEmail) => {
         try {
             if (!auth.currentUser) return alert ("You must be logged in.");
@@ -154,89 +170,114 @@ export default function Dashboard() {
     };
 
     return (
-        <div>
-            <h1>Dashboard</h1>
-            {user && (
-                <div>
-                    <h2>Welcome, {user.displayName}</h2>
-                    <p>Email: {user.email}</p>
-                    <button onClick={logout}>Logout</button>
-                    <button onClick={() => navigate("/create-band")}>Create a Band</button>
-                </div>    
-            )}
+        <div className="p-6">
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <hr className="my-4 border-gray-300" />
+      
+          <h2 className="text-2xl font-semibold mb-4">Upcoming Events</h2>
+          {events.length > 0 ? (
+            <ul className="space-y-4">
+              {events.map(event => (
+                <li key={event.id} className="p-4 bg-white shadow-md rounded-lg">
+                  <strong>{event.title}</strong> - {new Date(event.date).toLocaleString()}
+                  <p><b>Location:</b> {event.location}</p>
+                  <p><b>Created By:</b> {event.createdBy === user.uid ? "You" : event.createdBy}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-500">No upcoming events.</p>
+          )}
+      
+          <hr className="my-6 border-gray-300" />
+      
+          <h2 className="text-2xl font-semibold mb-4">Your Bands</h2>
 
-            <h2>Upcoming Events</h2>
-            {events.length > 0 ?(
-                <ul>
-                    {events.map(event => (
-                        <li key={event.id} className="border p-3 rounded-md shadow-md mb-4">
-                            <strong>{event.title}</strong> - {new Date(event.date).toLocaleString()}
-                            <p><b>Location:</b> {event.location}</p>
-                            <p><b>Created By:</b> {event.createdBy === user.uid ? "You" : event.createdBy}</p>
-                        </li>
-                    ))}
-                </ul>
-            ) : (
-                <p>No upcoming events.</p>
-            )}
-
-            <h2>Your Bands</h2>
             {bands.length > 0 ? (
-                <ul>
-                    {bands.map(band =>(
-                        <li key={band.id} className="border p-3 rounded-md shadow-md mb-4">
-                            <strong>{band.name}</strong>
-                            <p><b>Leader:</b> {band.leaderId === user.uid ? "You" : "Someone else"}</p>
+            <ul className="space-y-4">
+                {bands.map((band) => (
+                <li key={band.id} className="p-4 bg-white shadow-md rounded-lg">
+                    <div className="flex justify-between items-center">
+                    <div>
+                        <h3 className="text-lg font-bold">{band.name}</h3>
+                        <p className="text-sm text-gray-600">
+                        {band.leaderId === user.uid ? "Leader" : "Member"}
+                        </p>
+                    </div>
 
-                            {band.leaderId === user.uid && (
-                                <button onClick={() => navigate(`/create-event/${band.id}`)}>Schedule Event</button>
+                    <button
+                        onClick={() => toggleBandExpansion(band.id)}
+                        className="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 transition"
+                    >
+                        {expandedBands[band.id] ? "Collapse" : "View Band"}
+                    </button>
+                    </div>
+
+                    {/* Show members if expanded */}
+                    {expandedBands[band.id] && (
+                    <div className="mt-4 p-3 border rounded-lg bg-gray-100">
+                        <p className="font-semibold">Members:</p>
+                        <ul className="mt-2 space-y-2">
+                        {band.members.map((member) => (
+                            <li key={member} className="flex justify-between items-center">
+                            {member} {member === user.email ? "(You)" : ""}
+                            
+                            {/* Show remove button only for leaders, except for themselves */}
+                            {band.leaderId === user.uid && member !== user.email && (
+                                <button
+                                className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-700 transition"
+                                onClick={() => removeMember(band.id, member)}
+                                >
+                                Remove
+                                </button>
                             )}
-
-                            <p><b>Members:</b></p>
-                            <ul className="list-disc ml-4">
-                                {band.members.map(member => (
-                                    <li key={member} className="flex justify-between items-center">
-                                        {member === user.email ? `${member} (You)` : member}
-
-                                        {band.leaderId === user.uid && member !== user.email && member !== band.leaderId && (
-                                            <button
-                                                className="ml-2 bg-red-500 text-white px-2 py-1 rounded"
-                                                onClick={() => removeMember(band.id, member)}
-                                            >
-                                                Remove
-                                            </button>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-
-                            {band.leaderId === user.uid && (
-                                <button onClick={() => navigate(`/invite/${band.id}`)}>Invite Members</button>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-            ) : (
-                <p>You are not a member of any bands yet.</p>
-            )}
-
-            
-
-            <h2>Pending Invitations</h2>
-            {invitations.length > 0 ? (
-            <ul>
-                {invitations.map(invite => (
-                <li key={invite.id}>
-                     <strong>{invite.bandName}</strong> (Invited by: {invite.invitedBy})
-                    <button onClick={() => acceptInvite(invite.id, invite.bandId)}>Accept</button>
-                    <button onClick={() => rejectInvite(invite.id)}>Reject</button>
+                            </li>
+                        ))}
+                        </ul>
+                    </div>
+                    )}
                 </li>
                 ))}
             </ul>
             ) : (
-            <p>No pending invitations.</p>
+            <p className="text-gray-500">You are not part of any bands yet.</p>
             )}
 
+      
+          <hr className="my-6 border-gray-300" />
+      
+          <h2 className="text-2xl font-semibold mb-4">Pending Invitations</h2>
+          {invitations.length > 0 ? (
+            <ul className="space-y-4">
+              {invitations.map(invite => (
+                <li key={invite.id} className="p-4 bg-white shadow-md rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-bold">{invite.bandName || "Unknown Band"}</h3>
+                      <p className="text-sm text-gray-600">Invited by: {invite.invitedBy || "Unknown User"}</p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => acceptInvite(invite.id, invite.bandId)}
+                        className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => rejectInvite(invite.id)}
+                        className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-700 transition"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-500">No pending invitations.</p>
+          )}
         </div>
-    );
+      );
+      
 }
