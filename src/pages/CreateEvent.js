@@ -9,6 +9,8 @@ export default function CreateEvent() {
     const [selectedBand, setSelectedBand] = useState("");
     const [date, setDate] = useState("");
     const [location, setLocation] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
     const { bandId } = useParams();
     const navigate = useNavigate();
 
@@ -21,12 +23,12 @@ export default function CreateEvent() {
             const querySnapshot = await getDocs(q);
 
             const userBands = querySnapshot.docs.map(doc => ({
-                id:doc.id,
+                id: doc.id,
                 name: doc.data().name,
             }));
 
             setBands(userBands);
-            if(userBands.length > 0) {
+            if (userBands.length > 0) {
                 setSelectedBand(userBands[0].id);
             }
         };
@@ -36,10 +38,14 @@ export default function CreateEvent() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedBand) return alert("Please select a band.");
-        if (!title.trim() || !date.trim() || !location.trim()) return alert("All fields are required.");
+        setError("");
+        if (!selectedBand || !title.trim() || !date.trim() || !location.trim()) {
+            setError("All fields are required.");
+            return;
+        }
 
         try {
+            setLoading(true);
             await addDoc(collection(db, "events"), {
                 title,
                 date,
@@ -48,73 +54,83 @@ export default function CreateEvent() {
                 createdBy: auth.currentUser.uid,
             });
 
-            alert("Event created!");
+            alert("Event created successfully!");
             navigate("/dashboard");
         } catch (error) {
             console.error("Error creating event:", error);
-            alert("Failed to create event.");
+            setError("Failed to create event.");
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <div className="p-6">
-            <h1 className="text-2xl font-bold mb-4">Create Event</h1>
+        <div className="flex justify-center items-center min-h-screen">
+            <div className="bg-white shadow-lg rounded-lg p-6 w-full max-w-md">
+                <h1 className="text-2xl font-bold text-center mb-4">Create Event</h1>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Select Band Dropdown */}
-                <div>
-                    <label className="block text-gray-700">Select Band:</label>
-                    <select
-                        value={selectedBand}
-                        onChange={(e) => setSelectedBand(e.target.value)}
-                        className="w-full p-2 border rounded"
+                {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Select Band Dropdown */}
+                    <div>
+                        <label className="block text-gray-700 font-medium">Select Band:</label>
+                        <select
+                            value={selectedBand}
+                            onChange={(e) => setSelectedBand(e.target.value)}
+                            className="w-full p-2 border rounded focus:ring focus:ring-purple-300"
+                        >
+                            {bands.map((band) => (
+                                <option key={band.id} value={band.id}>{band.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Event Title */}
+                    <div>
+                        <label className="block text-gray-700 font-medium">Event Title:</label>
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="w-full p-2 border rounded focus:ring focus:ring-purple-300"
+                            placeholder="Enter event title"
+                        />
+                    </div>
+
+                    {/* Event Date */}
+                    <div>
+                        <label className="block text-gray-700 font-medium">Date & Time:</label>
+                        <input
+                            type="datetime-local"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className="w-full p-2 border rounded focus:ring focus:ring-purple-300"
+                        />
+                    </div>
+
+                    {/* Location */}
+                    <div>
+                        <label className="block text-gray-700 font-medium">Location:</label>
+                        <input
+                            type="text"
+                            value={location}
+                            onChange={(e) => setLocation(e.target.value)}
+                            className="w-full p-2 border rounded focus:ring focus:ring-purple-300"
+                            placeholder="Enter event location"
+                        />
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-purple-600 text-white p-3 rounded hover:bg-purple-700 transition disabled:bg-gray-400"
                     >
-                        {bands.map((band) => (
-                            <option key={band.id} value={band.id}>{band.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                {/* Event Title */}
-                <div>
-                    <label className="block text-gray-700">Event Title:</label>
-                    <input
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        className="w-full p-2 border rounded"
-                        placeholder="Enter event title"
-                    />
-                </div>
-
-                {/* Event Date */}
-                <div>
-                    <label className="block text-gray-700">Date & Time:</label>
-                    <input
-                        type="datetime-local"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        className="w-full p-2 border rounded"
-                    />
-                </div>
-
-                {/* Location */}
-                <div>
-                    <label className="block text-gray-700">Location:</label>
-                    <input
-                        type="text"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        className="w-full p-2 border rounded"
-                        placeholder="Enter event location"
-                    />
-                </div>
-
-                {/* Submit Button */}
-                <button type="submit" className="w-full bg-purple-600 text-white p-3 rounded hover:bg-purple-700 transition">
-                    Create Event
-                </button>
-            </form>
+                        {loading ? "Creating..." : "Create Event"}
+                    </button>
+                </form>
+            </div>
         </div>
     );
 }
