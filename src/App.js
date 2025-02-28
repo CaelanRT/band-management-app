@@ -9,7 +9,10 @@ import CreateBand from "./pages/CreateBand";
 import InviteMember from "./pages/InviteMember";
 import CreateEvent from "./pages/CreateEvent";
 import Bands from "./pages/Bands";
-import BandDetails from "./pages/BandDetails"
+import BandDetails from "./pages/BandDetails";
+import Events from "./pages/Events.js";
+import EventDetails from "./pages/EventDetails.js";
+
 
 export default function App() {
   const [user, setUser] = useState(undefined);
@@ -80,6 +83,8 @@ function DashboardLayout() {
             <Route path="/create-event/:bandId" element={<CreateEvent />} />
             <Route path="/bands" element={<Bands />} />
             <Route path="/bands/:bandId" element={<BandDetails />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/events/:eventId" element={<EventDetails />} />
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>
         </div>
