@@ -180,38 +180,85 @@ function FloatingActionButton({ bands }) {
   const toggleMenu = () => setExpanded(!expanded);
 
   return (
-    <div className="fixed bottom-6 right-6 flex flex-col items-center">
-      <div className={`flex flex-col items-center space-y-2 transition-all duration-300 ${expanded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6 pointer-events-none"}`}>
-        <button
-          onClick={() => handleNavigate("/create-band")}
-          className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition transform scale-95"
-          style={{position: "absolute", bottom:"-50px", right: "60px"}}
-        >
-          <FaMusic size={20} />
-        </button>
-        <button
-          onClick={() => handleNavigate("/create-event/:bandId")}
-          className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition transform scale-95"
-          style={{ position: "absolute", bottom: "10px", right: "30px" }}
-        >
-          <FaCalendarAlt size={20} />
-        </button>
-        <button
-          onClick={() => handleNavigate("/invite/:bandId")}
-          className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition transform scale-95"
-          style={{ position: "absolute", bottom: "50px", right: "-20px" }}
-        >
-          <FaUsers size={20} />
-        </button>
+    <div className="fixed bottom-6 right-6 flex flex-col items-center space-y-2">
+      {/* 🔹 Background Overlay - Only visible when expanded */}
+      {expanded && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm z-10"
+          onClick={toggleMenu} // Clicking outside closes the menu
+        ></div>
+      )}
+  
+      {/* 🔹 Buttons - Show when expanded */}
+      <div
+        className={`flex flex-col items-center space-y-3 transition-all duration-300 z-20 ${
+          expanded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6 pointer-events-none"
+        }`}
+      >
+        {/* Create Band */}
+        <div className="relative flex items-center group">
+          <button
+            onClick={() => handleNavigate("/create-band")}
+            className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition"
+          >
+            <FaMusic size={20} />
+          </button>
+          <span
+            className={`absolute right-14 bg-purple-600 text-white text-xs px-2 py-1 rounded transition-opacity duration-200
+              ${expanded ? "block" : "hidden"} md:hidden md:group-hover:block`}
+          >
+            Create Band
+          </span>
+        </div>
+  
+        {/* Create Event */}
+        <div className="relative flex items-center group">
+          <button
+            onClick={() => handleNavigate("/create-event/:bandId")}
+            className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition"
+          >
+            <FaCalendarAlt size={20} />
+          </button>
+          <span
+            className={`absolute right-14 bg-purple-600 text-white text-xs px-2 py-1 rounded transition-opacity duration-200
+              ${expanded ? "block" : "hidden"} md:hidden md:group-hover:block`}
+          >
+            Create Event
+          </span>
+        </div>
+  
+        {/* Invite Member */}
+        <div className="relative flex items-center group">
+          <button
+            onClick={() => handleNavigate("/invite/:bandId")}
+            className="bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition"
+          >
+            <FaUsers size={20} />
+          </button>
+          <span
+            className={`absolute right-14 bg-purple-600 text-white text-xs px-2 py-1 rounded transition-opacity duration-200
+              ${expanded ? "block" : "hidden"} md:hidden md:group-hover:block`}
+          >
+            Invite Member
+          </span>
+        </div>
       </div>
-
+  
+      {/* 🔹 Main Floating Button */}
       <button
         onClick={toggleMenu}
-        className="bg-purple-800 text-white p-5 rounded-full shadow-lg hover:bg-purple-700 transition"
-        >
-          <FaPlus size={24} className={`transform transition-transform duration-300 ${expanded ? "rotate-45" : "rotate-0"}`} />
-        </button>
+        className="bg-purple-800 text-white p-5 rounded-full shadow-lg hover:bg-purple-700 transition z-30"
+      >
+        <FaPlus
+          size={24}
+          className={`transform transition-transform duration-300 ${expanded ? "rotate-45" : "rotate-0"}`}
+        />
+      </button>
     </div>
   );
+  
+  
+  
+  
 }
 

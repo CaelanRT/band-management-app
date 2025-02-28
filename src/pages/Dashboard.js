@@ -2,6 +2,7 @@ import { auth, db } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, deleteDoc, arrayRemove } from "firebase/firestore";
+import { FaTimes } from "react-icons/fa";
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function Dashboard() {
     const [invitations, setInvitations] = useState([]);
     const [expandedBands, setExpandedBands] = useState({});
     const [eventCreators, setEventCreators] = useState({});
+    const [forceRender, setForceRender] = useState(false);
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -25,15 +27,15 @@ export default function Dashboard() {
             const querySnapshot = await getDocs(q);
 
             //store bands in state
-            const userBands = await Promise.all(querySnapshot.docs.map(async (doc) => {
-                const bandData = doc.data();
+            const userBands = await Promise.all(querySnapshot.docs.map(async (bandDoc) => {
+                const bandData = bandDoc.data();
 
                 const memberNames = await Promise.all(
                     bandData.members.map(async (uid) => await getUserName(uid))
                 );
 
                 return {
-                    id: doc.id,
+                    id: bandDoc.id,
                     ...bandData,
                     members: memberNames,
                     leaderName: await getUserName(bandData.leaderId)
@@ -51,10 +53,21 @@ export default function Dashboard() {
                 const eventQuery = query(eventsRef, where("bandId", "in", userBands.map(band => band.id)));
                 const eventSnapshot = await getDocs(eventQuery);
 
-                const userEvents = eventSnapshot.docs.map(doc => ({
-                 id: doc.id,
-                    ...doc.data()
-                }));
+                const userEvents = await Promise.all(
+                    eventSnapshot.docs.map(async (eventDoc) => {
+                        const eventData = eventDoc.data();
+
+                        const bandRef = doc(db, "bands", eventData.bandId);
+                        const bandSnap = await getDoc(bandRef);
+                        const bandName = bandSnap.exists() ? bandSnap.data().name : "Unknown Band";
+
+                        return {
+                            id: eventDoc.id,
+                            ...eventData,
+                            bandName,
+                        };
+                    })
+                );
                 setEvents(userEvents);
 
                 const creatorNames = [];
@@ -72,61 +85,91 @@ export default function Dashboard() {
             const inviteQuery = query(collection(db, "invitations"), where("invitedEmail", "==", userEmail));
             const inviteSnapshot = await getDocs(inviteQuery);
 
-            const pendingInvites = inviteSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
-
-            console.log("Fetched Invitations", pendingInvites);
+            const pendingInvites = await Promise.all(
+                inviteSnapshot.docs.map(async (inviteDoc) => {  
+                    const inviteData = inviteDoc.data();
             
-            setInvitations(pendingInvites);
+                    // Fetch Band Name
+                    const bandRef = doc(db, "bands", inviteData.bandId);
+                    const bandSnap = await getDoc(bandRef);
+                    const bandName = bandSnap.exists() ? bandSnap.data().name : "Unknown Band";
+        
+                    // Fetch Inviter Name
+                    let inviterName = "Unknown User";
+                    if (inviteData.invitedBy) {
+                        try {
+                            const inviterRef = doc(db, "users", inviteData.invitedBy);
+                            const inviterSnap = await getDoc(inviterRef);
+                            if (inviterSnap.exists()) {
+                                inviterName = inviterSnap.data().displayName || "Unknown User";
+                            }
+                            console.log(`Fetched Name for UID ${inviteData.invitedBy}: ${inviterName}`);
+                        } catch (error) {
+                            console.error("Error fetching inviter name:", error);
+                        }
+                    }
+        
+                    
+                    setEventCreators((prevCreators) => ({
+                        ...prevCreators,
+                        [inviteData.invitedBy]: inviterName,
+                    }));
+        
+                    return {
+                        id: inviteDoc.id,  
+                        bandName,
+                        invitedBy: inviteData.invitedBy,
+                        ...inviteData
+                    };
+                })
+            );
+            
+            console.log("Final Processed Invitations:", pendingInvites);
+            console.log("eventCreators state before updating invitations:", eventCreators);
+            console.log("Final Processed Invitations before setting state:", pendingInvites);
+
+            setInvitations([...pendingInvites]);
+            
+
         } 
     
         fetchUserData();
     }, [navigate]);
 
+    //accept invite
     const acceptInvite = async (inviteId, bandId) => {
         try {
-          const user = auth.currentUser;
-          if (!user) return alert("You must be logged in.");
-
-          
-      
-          //Update the band document to add the user as a member
-          const bandRef = doc(db, "bands", bandId);
-          const bandSnap = await getDoc(bandRef);
-
-          if(!bandSnap.exists()) {
-            alert("Band not found.");
-            return;
-          }
-
-      
-          if (bandSnap.exists()) {
-            const bandData = bandSnap.data();
-            const updatedMembers = [...(bandData.members || []), user.uid];
+            const user = auth.currentUser;
+            if (!user) return alert("You must be logged in.");
+    
+            const bandRef = doc(db, "bands", bandId);
+            const bandSnap = await getDoc(bandRef);
+    
+            if (!bandSnap.exists()) {
+                alert("Band not found.");
+                return;
+            }
+    
             
             await updateDoc(bandRef, {
-                members: arrayUnion(user.uid)
+                members: arrayUnion(user.uid) 
             });
-
-      
-            //  Delete the invitation after accepting
+    
+            
             await deleteDoc(doc(db, "invitations", inviteId));
-
-      
+    
             alert("You have joined the band!");
             setInvitations(invitations.filter(invite => invite.id !== inviteId));
-      
-            //  Refresh the bands list to include the new band
-            setBands([...bands, { id: bandId, ...bandData, members: updatedMembers }]);
-          }
+    
+            
+            setBands([...bands, { id: bandId, ...bandSnap.data(), members: [...bandSnap.data().members, user.uid] }]);
         } catch (error) {
-          console.error("Error accepting invite:", error);
-          alert("Failed to accept invite.");
+            console.error("Error accepting invite:", error);
+            alert("Failed to accept invite.");
         }
-      };
-      
+    };
+    
+      //reject invite
       const rejectInvite = async (inviteId) => {
         try {
           await deleteDoc(doc(db, "invitations", inviteId));
@@ -138,6 +181,7 @@ export default function Dashboard() {
         }
       };
 
+      //toggle band expansion
       const toggleBandExpansion = (bandId) => {
         setExpandedBands((prev) => ({
             ...prev,
@@ -145,6 +189,7 @@ export default function Dashboard() {
         }));
       };
 
+      //remove member
       const removeMember = async (bandId, memberName) => {
         try {
             if (!auth.currentUser) return alert("You must be logged in.");
@@ -208,7 +253,7 @@ export default function Dashboard() {
     };
     
     
-
+    //get username
     const getUserName = async (uid) => {
         if (!uid) return "Unknown User";
 
@@ -227,12 +272,17 @@ export default function Dashboard() {
         }
     }
 
-
-    //logout function
-    const logout = async () => {
-        await auth.signOut();
-        navigate("/login");
-    };
+    //delete event
+    const deleteEvent = async (eventId) => {
+        try {
+            await deleteDoc(doc(db, "events", eventId));
+            setEvents(events.filter(event => event.id !== eventId));
+            alert("Event deleted successfully!")
+        } catch (error) {
+            console.error("Error deleting event:", error);
+            alert("Failed to delete event.");
+        }
+    }
 
     return (
         <div className="p-6">
@@ -240,19 +290,30 @@ export default function Dashboard() {
           <hr className="my-4 border-gray-300" />
       
           <h2 className="text-2xl font-semibold mb-4">Upcoming Events</h2>
-          {events.length > 0 ? (
+            {events.length > 0 ? (
             <ul className="space-y-4">
-              {events.map(event => (
-                <li key={event.id} className="p-4 bg-white shadow-md rounded-lg">
-                  <strong>{event.title}</strong> - {new Date(event.date).toLocaleString()}
-                  <p><b>Location:</b> {event.location}</p>
-                  <p><b>Created By:</b> {event.createdBy === user.uid ? "You" : eventCreators[event.createdBy] || "Loading..."}</p>
+                {events.map(event => (
+                <li key={event.id} className="p-4 bg-white shadow-md rounded-lg relative">
+                    <strong>{event.title}</strong> - {new Date(event.date).toLocaleString()}
+                    <p><b>Location:</b> {event.location}</p>
+                    <p><b>Band:</b> {event.bandName || "Unknown Band"}</p>
+                    <p><b>Created By:</b> {event.createdBy === user.uid ? "You" : eventCreators[event.createdBy] || "Loading..."}</p>
+                    {(event.createdBy === user.uid || bands.some(band => band.id === event.bandId && band.leaderId === user.uid)) && (
+                    <button
+                        onClick={() => deleteEvent(event.id)}
+                        className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition"
+                        title="Delete Event"
+                    >
+                        <FaTimes size={18} />
+                    </button>
+                    )}
                 </li>
-              ))}
+                ))}
             </ul>
-          ) : (
+            ) : (
             <p className="text-gray-500">No upcoming events.</p>
-          )}
+            )}
+
       
           <hr className="my-6 border-gray-300" />
       
@@ -314,30 +375,31 @@ export default function Dashboard() {
           <h2 className="text-2xl font-semibold mb-4">Pending Invitations</h2>
           {invitations.length > 0 ? (
             <ul className="space-y-4">
-              {invitations.map(invite => (
-                <li key={invite.id} className="p-4 bg-white shadow-md rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg font-bold">{invite.bandName || "Unknown Band"}</h3>
-                      <p className="text-sm text-gray-600">Invited by: {invite.invitedBy || "Unknown User"}</p>
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => acceptInvite(invite.id, invite.bandId)}
-                        className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => rejectInvite(invite.id)}
-                        className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-700 transition"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
+              
+                {invitations.map(invite => (
+                    <li key={invite.id} className="border p-3 rounded-md shadow-md mb-4">
+                        <strong>{invite.bandName}</strong>  
+                        <p><b>Invited by:</b> {eventCreators[invite.invitedBy] || "Fetching..."}</p>
+
+
+
+                        <div className="flex space-x-2 mt-2">
+                            <button 
+                                className="bg-green-500 text-white px-2 py-1 rounded hover:bg-green-700 transition"
+                                onClick={() => acceptInvite(invite.id, invite.bandId)}
+                            >
+                                Accept
+                            </button>
+
+                            <button 
+                                className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-700 transition"
+                                onClick={() => rejectInvite(invite.id)}
+                            >
+                                Reject
+                            </button>
+                        </div>
+                    </li>
+                ))}
             </ul>
           ) : (
             <p className="text-gray-500">No pending invitations.</p>
