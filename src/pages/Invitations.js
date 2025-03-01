@@ -41,7 +41,7 @@ export default function Invitations() {
                 })
             );
 
-            console.log("Final Processed Invitations:", pendingInvites);
+            
             setInvitations(pendingInvites);
 
             // Fetch inviter names after setting invites
@@ -74,7 +74,7 @@ export default function Invitations() {
             })
         );
 
-        console.log("Updated Inviter Names:", updatedNames);
+        
         setInviterNames((prev) => ({ ...prev, ...updatedNames })); // Merge with previous state
     };
 

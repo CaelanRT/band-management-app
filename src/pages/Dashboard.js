@@ -16,6 +16,8 @@ export default function Dashboard() {
 
     useEffect(() => {
         const fetchUserData = async () => {
+
+
             if (!auth.currentUser) return navigate("/login");
 
             setUser(auth.currentUser);
@@ -42,7 +44,6 @@ export default function Dashboard() {
                 }
             }))
 
-            console.log("Fetched Bands:", userBands);
             setBands(userBands);
 
             if (userBands.length === 0) {
@@ -52,6 +53,8 @@ export default function Dashboard() {
                 const eventsRef = collection(db, "events");
                 const eventQuery = query(eventsRef, where("bandId", "in", userBands.map(band => band.id)));
                 const eventSnapshot = await getDocs(eventQuery);
+
+                
 
                 const userEvents = await Promise.all(
                     eventSnapshot.docs.map(async (eventDoc) => {
@@ -93,6 +96,7 @@ export default function Dashboard() {
                     const bandRef = doc(db, "bands", inviteData.bandId);
                     const bandSnap = await getDoc(bandRef);
                     const bandName = bandSnap.exists() ? bandSnap.data().name : "Unknown Band";
+                    
         
                     // Fetch Inviter Name
                     let inviterName = "Unknown User";
@@ -103,7 +107,6 @@ export default function Dashboard() {
                             if (inviterSnap.exists()) {
                                 inviterName = inviterSnap.data().displayName || "Unknown User";
                             }
-                            console.log(`Fetched Name for UID ${inviteData.invitedBy}: ${inviterName}`);
                         } catch (error) {
                             console.error("Error fetching inviter name:", error);
                         }
@@ -124,9 +127,6 @@ export default function Dashboard() {
                 })
             );
             
-            console.log("Final Processed Invitations:", pendingInvites);
-            console.log("eventCreators state before updating invitations:", eventCreators);
-            console.log("Final Processed Invitations before setting state:", pendingInvites);
 
             setInvitations([...pendingInvites]);
             
@@ -143,31 +143,24 @@ export default function Dashboard() {
             if (!user) return alert("You must be logged in.");
     
             const bandRef = doc(db, "bands", bandId);
-            const bandSnap = await getDoc(bandRef);
-    
-            if (!bandSnap.exists()) {
-                alert("Band not found.");
-                return;
-            }
     
             
             await updateDoc(bandRef, {
-                members: arrayUnion(user.uid) 
+                members: arrayUnion(user.uid),
             });
+            
     
             
             await deleteDoc(doc(db, "invitations", inviteId));
+            
     
             alert("You have joined the band!");
-            setInvitations(invitations.filter(invite => invite.id !== inviteId));
-    
-            
-            setBands([...bands, { id: bandId, ...bandSnap.data(), members: [...bandSnap.data().members, user.uid] }]);
         } catch (error) {
             console.error("Error accepting invite:", error);
-            alert("Failed to accept invite.");
+            alert(`Failed to accept invite: ${error.message}`);
         }
     };
+    
     
       //reject invite
       const rejectInvite = async (inviteId) => {
@@ -228,14 +221,14 @@ export default function Dashboard() {
                 return;
             }
     
-            console.log(`Removing ${memberName} (UID: ${memberUID}) from band ${bandId}`);
+           
     
             
             await updateDoc(bandRef, {
                 members: arrayRemove(memberUID) 
             });
     
-            console.log("Member removed from Firestore!");
+            
             
             setBands(prevBands =>
                 prevBands.map(band =>

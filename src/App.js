@@ -13,6 +13,7 @@ import BandDetails from "./pages/BandDetails";
 import Events from "./pages/Events.js";
 import EventDetails from "./pages/EventDetails.js";
 import Invitations from "./pages/Invitations";
+import Settings from "./pages/Settings"
 
 
 
@@ -88,6 +89,7 @@ function DashboardLayout() {
             <Route path="/events" element={<Events />} />
             <Route path="/events/:eventId" element={<EventDetails />} />
             <Route path="/invitations" element={<Invitations />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>
         </div>

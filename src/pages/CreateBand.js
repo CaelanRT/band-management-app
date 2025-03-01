@@ -36,7 +36,7 @@ export default function CreateBand() {
                 members: [user.uid],
             });
 
-            setSuccessMessage(`BAnd "${bandName}" created successfully!`);
+            setSuccessMessage(`Band "${bandName}" created successfully!`);
             setBandName("");
 
             setTimeout(() => {
