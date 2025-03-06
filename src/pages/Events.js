@@ -1,53 +1,59 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { FaCalendarAlt, FaClock, FaMapMarkerAlt, FaArrowLeft } from "react-icons/fa";
 
 export default function Events() {
     const navigate = useNavigate();
-    const [events, setEvents] = useState([]);
+    const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const [pastEvents, setPastEvents] = useState([]);
     const [bandNames, setBandNames] = useState({});
 
     useEffect(() => {
-        const fetchEvents = async () => {
-            if (!auth.currentUser) return navigate("/login");
+        if (!auth.currentUser) return navigate("/login");
 
-            // Get the bands the user is in
-            const bandsRef = collection(db, "bands");
-            const bandsQuery = query(bandsRef, where("members", "array-contains", auth.currentUser.uid));
-            const bandsSnapshot = await getDocs(bandsQuery);
+        const bandsRef = collection(db, "bands");
+        const eventsRef = collection(db, "events");
 
+        // Real-time listener for user's bands
+        const bandsQuery = query(bandsRef, where("members", "array-contains", auth.currentUser.uid));
+        const unsubscribeBands = onSnapshot(bandsQuery, (bandsSnapshot) => {
             const bandMap = {};
             const bandIds = bandsSnapshot.docs.map((doc) => {
                 bandMap[doc.id] = doc.data().name;
                 return doc.id;
             });
-
             setBandNames(bandMap);
 
-            if (bandIds.length === 0) return;
+            if (bandIds.length === 0) {
+                setUpcomingEvents([]);
+                setPastEvents([]);
+                return;
+            }
 
-            // Fetch events for the user's bands
-            const eventsRef = collection(db, "events");
+            // Real-time listener for events
             const eventsQuery = query(eventsRef, where("bandId", "in", bandIds));
-            const eventsSnapshot = await getDocs(eventsQuery);
+            const unsubscribeEvents = onSnapshot(eventsQuery, (eventSnapshot) => {
+                const now = new Date();
+                const eventList = eventSnapshot.docs.map((doc) => {
+                    const eventData = doc.data();
+                    return {
+                        id: doc.id,
+                        bandName: bandMap[eventData.bandId] || "Unknown Band",
+                        ...eventData,
+                    };
+                });
 
-            const eventList = eventsSnapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
+                setUpcomingEvents(eventList.filter(event => new Date(event.date) > now));
+                setPastEvents(eventList.filter(event => new Date(event.date) <= now));
+            });
 
-            setEvents(eventList);
-        };
+            return () => unsubscribeEvents(); // Cleanup events listener
+        });
 
-        fetchEvents();
+        return () => unsubscribeBands(); // Cleanup bands listener
     }, [navigate]);
-
-    // Split events into upcoming and past
-    const now = new Date();
-    const upcomingEvents = events.filter(event => new Date(event.date) > now);
-    const pastEvents = events.filter(event => new Date(event.date) <= now);
 
     return (
         <div className="p-6 flex flex-col items-center">

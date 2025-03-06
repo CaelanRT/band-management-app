@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { FaArrowLeft } from "react-icons/fa"; 
 
 export default function Bands() {
@@ -9,24 +9,23 @@ export default function Bands() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const fetchBands = async () => {
-            if (!auth.currentUser) return navigate("/login");
+        if (!auth.currentUser) return navigate("/login");
 
-            const bandsRef = collection(db, "bands");
-            const q = query(bandsRef, where("members", "array-contains", auth.currentUser.uid));
-            const querySnapshot = await getDocs(q);
+        const bandsRef = collection(db, "bands");
+        const q = query(bandsRef, where("members", "array-contains", auth.currentUser.uid));
 
-            const userBands = querySnapshot.docs.map(doc => ({
+        // Listen for real-time changes
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const userBands = snapshot.docs.map(doc => ({
                 id: doc.id,
                 name: doc.data().name,
                 leaderId: doc.data().leaderId,
             }));
             setBands(userBands);
-        };
+        });
 
-        fetchBands();
+        return () => unsubscribe(); // Cleanup listener on unmount
     }, [navigate]);
-
 
     return (
         <div className="p-6">

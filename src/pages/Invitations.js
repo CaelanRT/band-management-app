@@ -1,57 +1,51 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
-import { collection, query, where, getDocs, doc, deleteDoc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 import { FaArrowLeft, FaCheck, FaTimes } from "react-icons/fa";
 
 export default function Invitations() {
     const navigate = useNavigate();
     const [invitations, setInvitations] = useState([]);
-    const [inviterNames, setInviterNames] = useState({}); // Store inviter names separately
+    const [inviterNames, setInviterNames] = useState({});
     const [user, setUser] = useState(null);
 
     useEffect(() => {
-        const fetchUserData = async () => {
-            if (!auth.currentUser) return navigate("/login");
+        if (!auth.currentUser) return navigate("/login");
 
-            setUser(auth.currentUser);
-            console.log("Current User UID:", auth.currentUser.uid);
+        setUser(auth.currentUser);
+        console.log("Current User UID:", auth.currentUser.uid);
 
-            // Fetching pending invites
-            const userEmail = auth.currentUser.email;
-            const inviteQuery = query(collection(db, "invitations"), where("invitedEmail", "==", userEmail));
-            const inviteSnapshot = await getDocs(inviteQuery);
+        const userEmail = auth.currentUser.email;
+        const inviteQuery = query(collection(db, "invitations"), where("invitedEmail", "==", userEmail));
 
+        // Real-time listener for invitations
+        const unsubscribe = onSnapshot(inviteQuery, async (snapshot) => {
             const pendingInvites = await Promise.all(
-                inviteSnapshot.docs.map(async (inviteDoc) => {  
+                snapshot.docs.map(async (inviteDoc) => {
                     const inviteData = inviteDoc.data();
-                    
+
                     // Fetch Band Name
                     const bandRef = doc(db, "bands", inviteData.bandId);
                     const bandSnap = await getDoc(bandRef);
                     const bandName = bandSnap.exists() ? bandSnap.data().name : "Unknown Band";
 
-                    // Store the inviter's UID initially
                     return {
-                        id: inviteDoc.id,  
+                        id: inviteDoc.id,
                         bandName,
-                        invitedBy: inviteData.invitedBy, // Store UID first
+                        invitedBy: inviteData.invitedBy,
                         ...inviteData
                     };
                 })
             );
 
-            
             setInvitations(pendingInvites);
+            fetchInviterNames(pendingInvites);
+        });
 
-            // Fetch inviter names after setting invites
-            await fetchInviterNames(pendingInvites);
-        };
-
-        fetchUserData();
+        return () => unsubscribe(); // Cleanup listener on unmount
     }, [navigate]);
 
-    // Fetch inviter names separately
     const fetchInviterNames = async (invites) => {
         const updatedNames = {};
 
@@ -61,11 +55,7 @@ export default function Invitations() {
                     try {
                         const inviterRef = doc(db, "users", invite.invitedBy);
                         const inviterSnap = await getDoc(inviterRef);
-                        if (inviterSnap.exists()) {
-                            updatedNames[invite.invitedBy] = inviterSnap.data().displayName || "Unknown User";
-                        } else {
-                            updatedNames[invite.invitedBy] = "Unknown User";
-                        }
+                        updatedNames[invite.invitedBy] = inviterSnap.exists() ? inviterSnap.data().displayName : "Unknown User";
                     } catch (error) {
                         console.error("Error fetching inviter name:", error);
                         updatedNames[invite.invitedBy] = "Unknown User";
@@ -74,23 +64,19 @@ export default function Invitations() {
             })
         );
 
-        
-        setInviterNames((prev) => ({ ...prev, ...updatedNames })); // Merge with previous state
+        setInviterNames((prev) => ({ ...prev, ...updatedNames }));
     };
 
     const acceptInvite = async (inviteId, bandId) => {
         try {
-            const user = auth.currentUser;
-            if (!user) return alert("You must be logged in.");
+            if (!auth.currentUser) return alert("You must be logged in.");
 
             const bandRef = doc(db, "bands", bandId);
             await updateDoc(bandRef, {
-                members: arrayUnion(user.uid),
+                members: arrayUnion(auth.currentUser.uid),
             });
 
             await deleteDoc(doc(db, "invitations", inviteId));
-            setInvitations((prev) => prev.filter((invite) => invite.id !== inviteId));
-
             alert("You have joined the band!");
         } catch (error) {
             console.error("Error accepting invite:", error);
@@ -101,7 +87,6 @@ export default function Invitations() {
     const rejectInvite = async (inviteId) => {
         try {
             await deleteDoc(doc(db, "invitations", inviteId));
-            setInvitations((prev) => prev.filter((invite) => invite.id !== inviteId));
             alert("Invitation rejected.");
         } catch (error) {
             console.error("Error rejecting invite:", error);
@@ -111,7 +96,6 @@ export default function Invitations() {
 
     return (
         <div className="p-6 flex flex-col items-center">
-            {/* Back Button */}
             <button 
                 onClick={() => navigate("/dashboard")} 
                 className="flex items-center text-gray-600 hover:text-gray-800 self-start mb-4"
